@@ -1,10 +1,4 @@
-import {
-  MarkdownView,
-  Plugin,
-  TFile,
-  WorkspaceLeaf,
-  parseFrontMatterTags,
-} from "obsidian";
+import { MarkdownView, Plugin, TFile, WorkspaceLeaf } from "obsidian";
 import React from "react";
 import ReactDOM from "react-dom";
 import { FileEntity } from "./model/FileEntity";
@@ -21,6 +15,7 @@ import { readPreview } from "./preview";
 import { getTitle } from "./getTitle";
 import { loadSettings } from "./settings/index";
 import { Links } from "./links";
+import { getTwohopMetadataSignature } from "./metadataSignature";
 
 const CONTAINER_CLASS = "twohop-links-container";
 export const HOVER_LINK_ID = "2hop-links";
@@ -30,8 +25,7 @@ export default class TwohopLinksPlugin extends Plugin {
   showLinksInMarkdown: boolean;
   links: Links;
 
-  private previousLinks: string[] = [];
-  private previousTags: string[] = [];
+  private previousMetadataSignature = "";
 
   async onload(): Promise<void> {
     console.debug("------ loading obsidian-twohop-links plugin");
@@ -50,10 +44,8 @@ export default class TwohopLinksPlugin extends Plugin {
       (leaf: WorkspaceLeaf) => new SeparatePaneView(leaf, this, this.links)
     );
     this.registerEvent(
-      this.app.metadataCache.on("changed", async (file: TFile) => {
-        if (file === this.app.workspace.getActiveFile()) {
-          await this.renderTwohopLinks(false);
-        }
+      this.app.metadataCache.on("changed", async (_file: TFile) => {
+        await this.renderTwohopLinks(false);
       })
     );
     this.registerEvent(
@@ -142,34 +134,6 @@ export default class TwohopLinksPlugin extends Plugin {
     return containers;
   }
 
-  private getActiveFileLinks(file: TFile | null): string[] {
-    if (!file) {
-      return [];
-    }
-
-    const cache = this.app.metadataCache.getFileCache(file);
-    return cache && cache.links ? cache.links.map((link) => link.link) : [];
-  }
-
-  private getActiveFileTags(file: TFile | null): string[] {
-    if (!file) {
-      return [];
-    }
-
-    const cache = this.app.metadataCache.getFileCache(file);
-
-    let tags = cache && cache.tags ? cache.tags.map((tag) => tag.tag) : [];
-
-    if (cache && cache.frontmatter && cache.frontmatter.tags) {
-      const frontMatterTags = parseFrontMatterTags(cache.frontmatter);
-      if (frontMatterTags) {
-        tags = tags.concat(frontMatterTags);
-      }
-    }
-
-    return tags;
-  }
-
   async renderTwohopLinks(isForceUpdate: boolean): Promise<void> {
     if (this.settings.showTwoHopLinksInSeparatePane) {
       return;
@@ -182,13 +146,15 @@ export default class TwohopLinksPlugin extends Plugin {
       return;
     }
 
-    const currentLinks = this.getActiveFileLinks(activeFile);
-    const currentTags = this.getActiveFileTags(activeFile);
+    const currentMetadataSignature = getTwohopMetadataSignature(
+      this.app,
+      activeFile,
+      this.settings
+    );
 
     if (
       isForceUpdate ||
-      this.previousLinks.sort().join(",") !== currentLinks.sort().join(",") ||
-      this.previousTags.sort().join(",") !== currentTags.sort().join(",")
+      this.previousMetadataSignature !== currentMetadataSignature
     ) {
       const {
         forwardLinks,
@@ -200,6 +166,7 @@ export default class TwohopLinksPlugin extends Plugin {
       } = await this.links.gatherTwoHopLinks(activeFile);
 
       for (const container of this.getContainerElements(markdownView)) {
+        ReactDOM.unmountComponentAtNode(container);
         await this.injectTwohopLinks(
           forwardLinks,
           newLinks,
@@ -211,8 +178,7 @@ export default class TwohopLinksPlugin extends Plugin {
         );
       }
 
-      this.previousLinks = currentLinks;
-      this.previousTags = currentTags;
+      this.previousMetadataSignature = currentMetadataSignature;
     }
   }
 

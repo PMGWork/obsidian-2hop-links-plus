@@ -47,34 +47,25 @@ export class TwohopSettingTab extends PluginSettingTab {
         "panePositionIsRight"
       );
     }
-    this.createDropdownSetting(
-      "Sort Order",
-      "",
-      "sortOrder",
-      {
-        random: "Random",
-        filenameAsc: "File name (A to Z)",
-        filenameDesc: "File name (Z to A)",
-        modifiedDesc: "Modified time (new to old)",
-        modifiedAsc: "Modified time (old to new)",
-        createdDesc: "Created time (new to old)",
-        createdAsc: "Created time (old to new)",
-      }
-    );
+    this.createDropdownSetting("Sort Order", "", "sortOrder", {
+      random: "Random",
+      filenameAsc: "File name (A to Z)",
+      filenameDesc: "File name (Z to A)",
+      modifiedDesc: "Modified time (new to old)",
+      modifiedAsc: "Modified time (old to new)",
+      createdDesc: "Created time (new to old)",
+      createdAsc: "Created time (old to new)",
+    });
     this.createToggleSetting("Show Links", "", "showForwardConnectedLinks");
     this.createToggleSetting(
       "Show Back Links",
       "",
       "showBackwardConnectedLinks"
     );
+    this.createToggleSetting("Show 2Hop Links", "", "showTwohopLinks");
     this.createToggleSetting(
-      "Show 2Hop Links",
-      "",
-      "showTwohopLinks"
-    );
-    this.createToggleSetting(
-      "Show New Links",
-      "",
+      "Show New Links in Links",
+      "If true, unresolved links are displayed in the Links section.",
       "showNewLinks"
     );
     this.createTextAreaSetting(

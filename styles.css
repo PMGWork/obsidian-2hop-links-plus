@@ -98,6 +98,10 @@
   border-top: 10px solid var(--bg-box-top);
 }
 
+.twohop-links-new-link {
+  border-top: 10px solid var(--bg-header-new);
+}
+
 .twohop-links-box-preview {
   color: var(--text-box);
   font-size: 70%;
@@ -120,12 +124,6 @@
 .twohop-links-properties-header {
   background-color: var(--bg-header-properties);
   color: var(--title-header-properties);
-}
-
-/* new links */
-.twohop-links-new-links-header {
-  background-color: var(--bg-header-new);
-  color: var(--title-header-new);
 }
 
 .markdown-embed-content .twohop-links-container {

@@ -12,6 +12,7 @@ interface ConnectedLinksViewProps {
   onLoadMore: () => void;
   title: string;
   className: string;
+  getLinkClassName?: (fileEntity: FileEntity) => string;
   app: App;
 }
 
@@ -35,6 +36,7 @@ export default class ConnectedLinksView extends React.Component<ConnectedLinksVi
       nextProps.displayedBoxCount !== this.props.displayedBoxCount ||
       nextProps.title !== this.props.title ||
       nextProps.className !== this.props.className ||
+      nextProps.getLinkClassName !== this.props.getLinkClassName ||
       nextProps.app !== this.props.app
     );
   }
@@ -54,6 +56,7 @@ export default class ConnectedLinksView extends React.Component<ConnectedLinksVi
               return (
                 <LinkView
                   fileEntity={it}
+                  className={this.props.getLinkClassName?.(it)}
                   key={it.key()}
                   onClick={this.props.onClick}
                   getPreview={this.props.getPreview}

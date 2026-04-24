@@ -195,13 +195,13 @@ export class Links {
       }
     }
 
-    const sortedResolvedLinks = await this.getSortedFileEntities(
-      resolvedLinks,
+    const sortedForwardLinks = await this.getSortedFileEntities(
+      [...resolvedLinks, ...newLinks],
       (entity) => entity.sourcePath,
       this.settings.sortOrder
     );
     return {
-      resolved: sortedResolvedLinks,
+      resolved: sortedForwardLinks,
       new: newLinks,
     };
   }

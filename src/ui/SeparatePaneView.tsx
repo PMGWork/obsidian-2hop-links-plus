@@ -3,12 +3,12 @@ import React from "react";
 import ReactDOM from "react-dom";
 import TwohopLinksPlugin from "../main";
 import { Links } from "../links";
+import { getTwohopMetadataSignature } from "../metadataSignature";
 
 export class SeparatePaneView extends ItemView {
   private plugin: TwohopLinksPlugin;
   private lastActiveLeaf: WorkspaceLeaf | undefined;
-  private previousLinks: string[] = [];
-  private previousTags: string[] = [];
+  private previousMetadataSignature = "";
   links: Links;
 
   constructor(leaf: WorkspaceLeaf, plugin: TwohopLinksPlugin, links: Links) {
@@ -38,10 +38,8 @@ export class SeparatePaneView extends ItemView {
       this.registerActiveFileUpdateEvent();
 
       this.registerEvent(
-        this.app.metadataCache.on("changed", async (file: TFile) => {
-          if (file === this.app.workspace.getActiveFile()) {
-            await this.updateOrForceUpdate(false);
-          }
+        this.app.metadataCache.on("changed", async (_file: TFile) => {
+          await this.updateOrForceUpdate(false);
         })
       );
     } catch (error) {
@@ -52,13 +50,15 @@ export class SeparatePaneView extends ItemView {
   async updateOrForceUpdate(isForceUpdate: boolean): Promise<void> {
     try {
       const activeFile = this.app.workspace.getActiveFile();
-      const currentLinks = this.getActiveFileLinks(activeFile);
-      const currentTags = this.getActiveFileTags(activeFile);
+      const currentMetadataSignature = getTwohopMetadataSignature(
+        this.app,
+        activeFile,
+        this.plugin.settings
+      );
 
       if (
         isForceUpdate ||
-        this.previousLinks.sort().join(",") !== currentLinks.sort().join(",") ||
-        this.previousTags.sort().join(",") !== currentTags.sort().join(",") ||
+        this.previousMetadataSignature !== currentMetadataSignature ||
         activeFile === null
       ) {
         const {
@@ -83,8 +83,7 @@ export class SeparatePaneView extends ItemView {
 
         this.addLinkEventListeners();
 
-        this.previousLinks = currentLinks;
-        this.previousTags = currentTags;
+        this.previousMetadataSignature = currentMetadataSignature;
       }
     } catch (error) {
       this.handleError("Error rendering two hop links", error);
@@ -125,35 +124,6 @@ export class SeparatePaneView extends ItemView {
         }
       )
     );
-  }
-
-  private getActiveFileLinks(file: TFile | null): string[] {
-    if (!file) {
-      return [];
-    }
-
-    const cache = this.app.metadataCache.getFileCache(file);
-    return cache && cache.links ? cache.links.map((link) => link.link) : [];
-  }
-
-  private getActiveFileTags(file: TFile | null): string[] {
-    if (!file) {
-      return [];
-    }
-
-    const cache = this.app.metadataCache.getFileCache(file);
-
-    let tags = cache && cache.tags ? cache.tags.map((tag) => tag.tag) : [];
-
-    if (cache && cache.frontmatter && cache.frontmatter.tags) {
-      if (typeof cache.frontmatter.tags === "string") {
-        tags.push(cache.frontmatter.tags);
-      } else if (Array.isArray(cache.frontmatter.tags)) {
-        tags = tags.concat(cache.frontmatter.tags);
-      }
-    }
-
-    return tags;
   }
 
   addLinkEventListeners(): void {

@@ -6,6 +6,7 @@ import { HOVER_LINK_ID } from "../main";
 
 interface LinkViewProps {
   fileEntity: FileEntity;
+  className?: string;
   onClick: (fileEntity: FileEntity) => Promise<void>;
   getPreview: (fileEntity: FileEntity, signal: AbortSignal) => Promise<string>;
   getTitle: (fileEntity: FileEntity, signal: AbortSignal) => Promise<string>;
@@ -49,11 +50,11 @@ export default class LinkView
     const title = await this.props.getTitle(
       this.props.fileEntity,
       this.abortController.signal
-    )
+    );
     if (!this.abortController.signal.aborted) {
       this.setState({
         preview: preview,
-        title: title
+        title: title,
       });
     }
   }
@@ -142,9 +143,13 @@ export default class LinkView
   };
 
   render(): JSX.Element {
+    const className = ["twohop-links-box", this.props.className]
+      .filter(Boolean)
+      .join(" ");
+
     return (
       <div
-        className={"twohop-links-box"}
+        className={className}
         onTouchStart={() => {
           this.setState({ touchStart: Date.now() });
         }}
@@ -182,9 +187,7 @@ export default class LinkView
           event.dataTransfer.setData("text/plain", `[[${fileEntityLinkText}]]`);
         }}
       >
-        <div className="twohop-links-box-title">
-          {this.state.title}
-        </div>
+        <div className="twohop-links-box-title">{this.state.title}</div>
         <div className={"twohop-links-box-preview"}>
           <div>{this.state.preview}</div>
         </div>

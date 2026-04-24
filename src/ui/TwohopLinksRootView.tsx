@@ -3,7 +3,6 @@ import React, { createRef } from "react";
 import { FileEntity } from "../model/FileEntity";
 import TwohopLinksView from "./TwohopLinksView";
 import ConnectedLinksView from "./ConnectedLinksView";
-import NewLinksView from "./NewLinksView";
 import { PropertiesLinks } from "../model/PropertiesLinks";
 import { App, setIcon } from "obsidian";
 import {
@@ -118,8 +117,7 @@ interface TwohopLinksRootViewProps {
 type Category =
   | "forwardConnectedLinks"
   | "backwardConnectedLinks"
-  | "twoHopLinks"
-  | "newLinks";
+  | "twoHopLinks";
 
 interface TwohopLinksRootViewState {
   displayedBoxCount: Record<Category, number>;
@@ -134,7 +132,6 @@ export default class TwohopLinksRootView extends React.Component<
 > {
   loadMoreRefs: Record<Category, React.RefObject<HTMLButtonElement>> = {
     forwardConnectedLinks: createRef(),
-    newLinks: createRef(),
     backwardConnectedLinks: createRef(),
     twoHopLinks: createRef(),
   };
@@ -144,13 +141,11 @@ export default class TwohopLinksRootView extends React.Component<
     this.state = {
       displayedBoxCount: {
         forwardConnectedLinks: props.initialBoxCount,
-        newLinks: props.initialBoxCount,
         backwardConnectedLinks: props.initialBoxCount,
         twoHopLinks: props.initialBoxCount,
       },
       displayedSectionCount: {
         forwardConnectedLinks: props.initialSectionCount,
-        newLinks: props.initialSectionCount,
         backwardConnectedLinks: props.initialSectionCount,
         twoHopLinks: props.initialSectionCount,
       },
@@ -197,11 +192,9 @@ export default class TwohopLinksRootView extends React.Component<
           forwardConnectedLinks: this.props.initialBoxCount,
           backwardConnectedLinks: this.props.initialBoxCount,
           twoHopLinks: this.props.initialBoxCount,
-          newLinks: this.props.initialBoxCount,
         },
         displayedSectionCount: {
           forwardConnectedLinks: this.props.initialSectionCount,
-          newLinks: this.props.initialSectionCount,
           backwardConnectedLinks: this.props.initialSectionCount,
           twoHopLinks: this.props.initialSectionCount,
         },
@@ -230,6 +223,12 @@ export default class TwohopLinksRootView extends React.Component<
       this.props.tagLinksList,
       this.props.frontmatterKeyLinksList
     );
+    const newLinkKeys = new Set(this.props.newLinks.map((link) => link.key()));
+    const connectedLinks = showNewLinks
+      ? this.props.forwardConnectedLinks
+      : this.props.forwardConnectedLinks.filter(
+          (link) => !newLinkKeys.has(link.key())
+        );
 
     if (!autoLoadTwoHopLinks && !isLoaded) {
       return (
@@ -255,7 +254,7 @@ export default class TwohopLinksRootView extends React.Component<
         </button>
         {showForwardConnectedLinks && (
           <ConnectedLinksView
-            fileEntities={this.props.forwardConnectedLinks}
+            fileEntities={connectedLinks}
             displayedBoxCount={
               this.state.displayedBoxCount.forwardConnectedLinks
             }
@@ -265,6 +264,9 @@ export default class TwohopLinksRootView extends React.Component<
             onLoadMore={() => this.loadMoreBox("forwardConnectedLinks")}
             title={"Links"}
             className={"twohop-links-forward-links"}
+            getLinkClassName={(fileEntity) =>
+              newLinkKeys.has(fileEntity.key()) ? "twohop-links-new-link" : ""
+            }
             app={this.props.app}
           />
         )}
@@ -304,17 +306,6 @@ export default class TwohopLinksRootView extends React.Component<
           >
             Load more
           </button>
-        )}
-        {showNewLinks && (
-          <NewLinksView
-            fileEntities={this.props.newLinks}
-            displayedBoxCount={this.state.displayedBoxCount.newLinks}
-            onClick={this.props.onClick}
-            getPreview={this.props.getPreview}
-            getTitle={this.props.getTitle}
-            onLoadMore={() => this.loadMoreBox("newLinks")}
-            app={this.props.app}
-          />
         )}
       </div>
     );
