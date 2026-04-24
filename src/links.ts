@@ -3,6 +3,8 @@ import { FileEntity } from "./model/FileEntity";
 import {
   expandTagHierarchy,
   filePathToLinkText,
+  isImagePath,
+  normalizeLinkTarget,
   normalizeTagName,
   removeBlockReference,
   shouldExcludePath,
@@ -120,7 +122,10 @@ export class Links {
       ];
 
       for (const it of linkEntities) {
-        const key = removeBlockReference(it.link);
+        const key = normalizeLinkTarget(it.link);
+        if (isImagePath(key)) {
+          continue;
+        }
         if (!seen.has(key)) {
           seen.add(key);
           const targetFile = this.app.metadataCache.getFirstLinkpathDest(
@@ -130,7 +135,9 @@ export class Links {
 
           if (
             targetFile &&
-            shouldExcludePath(targetFile.path, this.settings.excludePaths)
+            (targetFile.path === activeFile.path ||
+              isImagePath(targetFile.path) ||
+              shouldExcludePath(targetFile.path, this.settings.excludePaths))
           ) {
             continue;
           }
@@ -177,12 +184,16 @@ export class Links {
       if (canvasData.nodes) {
         for (const node of canvasData.nodes) {
           if (node.type === "file") {
-            const key = node.file;
+            const key = normalizeLinkTarget(node.file);
+            if (key === activeFile.path || isImagePath(key)) {
+              continue;
+            }
             if (!seen.has(key)) {
               seen.add(key);
               const targetFile = this.app.vault.getAbstractFileByPath(key);
               if (
                 targetFile &&
+                !isImagePath(targetFile.path) &&
                 !shouldExcludePath(targetFile.path, this.settings.excludePaths)
               ) {
                 resolvedLinks.push(new FileEntity(targetFile.path, key));
@@ -234,7 +245,10 @@ export class Links {
       .metadataCache.resolvedLinks;
     const backLinkEntities: FileEntity[] = [];
     for (const src of Object.keys(resolvedLinks)) {
-      if (shouldExcludePath(src, this.settings.excludePaths)) {
+      if (
+        src === activeFile.path ||
+        shouldExcludePath(src, this.settings.excludePaths)
+      ) {
         continue;
       }
       for (const dest of Object.keys(resolvedLinks[src])) {
@@ -257,6 +271,10 @@ export class Links {
     );
 
     for (const canvasFile of canvasFiles) {
+      if (canvasFile.path === activeFile.path) {
+        continue;
+      }
+
       const canvasContent = await this.app.vault.read(canvasFile);
       let canvasData;
       try {
@@ -310,7 +328,11 @@ export class Links {
       for (const k of Object.keys(twohopLinkList)) {
         if (twohopLinkList[k].length > 0) {
           twoHopLinks[k] = twohopLinkList[k]
-            .filter((it) => !shouldExcludePath(it, this.settings.excludePaths))
+            .filter(
+              (it) =>
+                it !== activeFile.path &&
+                !shouldExcludePath(it, this.settings.excludePaths)
+            )
             .map((it) => {
               const linkText = filePathToLinkText(it);
               if (
@@ -343,12 +365,15 @@ export class Links {
       if (Array.isArray(canvasData.nodes)) {
         linkKeys = canvasData.nodes
           .filter((node: any) => node.type === "file")
-          .map((node: any) => node.file);
+          .map((node: any) => node.file)
+          .filter((path: string) => path !== activeFile.path);
       } else {
         linkKeys = [];
       }
     } else if (links[activeFile.path]) {
-      linkKeys = Object.keys(links[activeFile.path]);
+      linkKeys = Object.keys(links[activeFile.path]).filter(
+        (path) => path !== activeFile.path
+      );
     }
 
     const twoHopLinkEntities = (

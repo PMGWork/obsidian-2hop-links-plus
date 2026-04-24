@@ -1,6 +1,6 @@
 import { App, CachedMetadata, TFile, parseFrontMatterTags } from "obsidian";
 import type { TwohopPluginSettings } from "./settings/TwohopSettingTab";
-import { removeBlockReference, shouldExcludePath } from "./utils";
+import { normalizeLinkTarget, shouldExcludePath } from "./utils";
 
 const SIGNATURE_SEPARATOR = "\u001f";
 
@@ -41,7 +41,7 @@ function getCacheLinks(cache: CachedMetadata | null | undefined): string[] {
       ...(cache.links ?? []),
       ...(cache.embeds ?? []),
       ...(cache.frontmatterLinks ?? []),
-    ].map((link) => removeBlockReference(link.link))
+    ].map((link) => normalizeLinkTarget(link.link))
   );
 }
 

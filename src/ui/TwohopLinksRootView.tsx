@@ -108,7 +108,6 @@ interface TwohopLinksRootViewProps {
   showForwardConnectedLinks: boolean;
   showBackwardConnectedLinks: boolean;
   showTwohopLinks: boolean;
-  showNewLinks: boolean;
   autoLoadTwoHopLinks: boolean;
   initialBoxCount: number;
   initialSectionCount: number;
@@ -214,7 +213,6 @@ export default class TwohopLinksRootView extends React.Component<
       showForwardConnectedLinks,
       showBackwardConnectedLinks,
       showTwohopLinks,
-      showNewLinks,
       autoLoadTwoHopLinks,
     } = this.props;
     const { isLoaded } = this.state;
@@ -224,11 +222,6 @@ export default class TwohopLinksRootView extends React.Component<
       this.props.frontmatterKeyLinksList
     );
     const newLinkKeys = new Set(this.props.newLinks.map((link) => link.key()));
-    const connectedLinks = showNewLinks
-      ? this.props.forwardConnectedLinks
-      : this.props.forwardConnectedLinks.filter(
-          (link) => !newLinkKeys.has(link.key())
-        );
 
     if (!autoLoadTwoHopLinks && !isLoaded) {
       return (
@@ -254,7 +247,7 @@ export default class TwohopLinksRootView extends React.Component<
         </button>
         {showForwardConnectedLinks && (
           <ConnectedLinksView
-            fileEntities={connectedLinks}
+            fileEntities={this.props.forwardConnectedLinks}
             displayedBoxCount={
               this.state.displayedBoxCount.forwardConnectedLinks
             }

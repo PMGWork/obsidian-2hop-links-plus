@@ -1,8 +1,8 @@
 import { FileEntity } from "./model/FileEntity";
-import { formatDisplayTitle, removeBlockReference } from "./utils";
+import { formatDisplayTitle, normalizeLinkTarget } from "./utils";
 
 export async function getTitle(fileEntity: FileEntity) {
-  const linkText = removeBlockReference(fileEntity.linkText);
+  const linkText = normalizeLinkTarget(fileEntity.linkText);
 
   if (!this.settings.frontmatterPropertyKeyAsTitle) {
     return formatDisplayTitle(linkText);
@@ -13,7 +13,8 @@ export async function getTitle(fileEntity: FileEntity) {
   );
 
   if (file == null) return formatDisplayTitle(linkText);
-  if (!file.extension?.match(/^(md|markdown)$/)) return formatDisplayTitle(linkText);
+  if (!file.extension?.match(/^(md|markdown)$/))
+    return formatDisplayTitle(linkText);
 
   const metadata = this.app.metadataCache.getFileCache(file);
 

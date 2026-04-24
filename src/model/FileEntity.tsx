@@ -1,4 +1,4 @@
-import { removeBlockReference } from "../utils";
+import { normalizeLinkTarget } from "../utils";
 
 export class FileEntity {
   public sourcePath: string;
@@ -14,6 +14,6 @@ export class FileEntity {
 
   // Key to de-duplication.
   key(): string {
-    return removeBlockReference(this.linkText);
+    return normalizeLinkTarget(this.linkText);
   }
 }

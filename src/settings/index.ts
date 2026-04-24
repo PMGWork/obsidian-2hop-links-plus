@@ -6,7 +6,6 @@ export const DEFAULT_SETTINGS: TwohopPluginSettings = {
   showForwardConnectedLinks: true,
   showBackwardConnectedLinks: true,
   showTwohopLinks: true,
-  showNewLinks: true,
   excludePaths: [],
   initialBoxCount: 10,
   initialSectionCount: 20,

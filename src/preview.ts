@@ -1,10 +1,10 @@
 import { FileEntity } from "./model/FileEntity";
-import { removeBlockReference } from "./utils";
+import { isImagePath, normalizeLinkTarget } from "./utils";
 
 export async function readPreview(fileEntity: FileEntity) {
-  const linkText = removeBlockReference(fileEntity.linkText);
+  const linkText = normalizeLinkTarget(fileEntity.linkText);
 
-  if (fileEntity.linkText.match(/\.(png|bmp|jpg|jpeg)$/i)) {
+  if (isImagePath(fileEntity.linkText)) {
     return "";
   }
 

@@ -5,7 +5,7 @@ import { FileEntity } from "./model/FileEntity";
 import { TwohopLink } from "./model/TwohopLink";
 import TwohopLinksRootView from "./ui/TwohopLinksRootView";
 import { PropertiesLinks } from "./model/PropertiesLinks";
-import { removeBlockReference } from "./utils";
+import { normalizeLinkTarget } from "./utils";
 import {
   TwohopPluginSettings,
   TwohopSettingTab,
@@ -71,7 +71,7 @@ export default class TwohopLinksPlugin extends Plugin {
   }
 
   private async openFile(fileEntity: FileEntity): Promise<void> {
-    const linkText = removeBlockReference(fileEntity.linkText);
+    const linkText = normalizeLinkTarget(fileEntity.linkText);
 
     console.debug(
       `Open file: linkText='${linkText}', sourcePath='${fileEntity.sourcePath}'`
@@ -194,7 +194,6 @@ export default class TwohopLinksPlugin extends Plugin {
     const showForwardConnectedLinks = this.settings.showForwardConnectedLinks;
     const showBackwardConnectedLinks = this.settings.showBackwardConnectedLinks;
     const showTwohopLinks = this.settings.showTwohopLinks;
-    const showNewLinks = this.settings.showNewLinks;
     ReactDOM.render(
       <TwohopLinksRootView
         forwardConnectedLinks={forwardConnectedLinks}
@@ -210,7 +209,6 @@ export default class TwohopLinksPlugin extends Plugin {
         showForwardConnectedLinks={showForwardConnectedLinks}
         showBackwardConnectedLinks={showBackwardConnectedLinks}
         showTwohopLinks={showTwohopLinks}
-        showNewLinks={showNewLinks}
         autoLoadTwoHopLinks={this.settings.autoLoadTwoHopLinks}
         initialBoxCount={this.settings.initialBoxCount}
         initialSectionCount={this.settings.initialSectionCount}

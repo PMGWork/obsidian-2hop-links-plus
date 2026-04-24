@@ -7,7 +7,6 @@ export interface TwohopPluginSettings {
   showForwardConnectedLinks: boolean;
   showBackwardConnectedLinks: boolean;
   showTwohopLinks: boolean;
-  showNewLinks: boolean;
   excludePaths: string[];
   initialBoxCount: number;
   initialSectionCount: number;
@@ -63,11 +62,6 @@ export class TwohopSettingTab extends PluginSettingTab {
       "showBackwardConnectedLinks"
     );
     this.createToggleSetting("Show 2Hop Links", "", "showTwohopLinks");
-    this.createToggleSetting(
-      "Show New Links in Links",
-      "If true, unresolved links are displayed in the Links section.",
-      "showNewLinks"
-    );
     this.createTextAreaSetting(
       "Exclude Paths",
       "List of file or folder paths to exclude, one per line.",

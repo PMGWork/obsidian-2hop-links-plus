@@ -93,6 +93,13 @@
   margin: auto;
 }
 
+.twohop-links-box-preview img {
+  display: block;
+  max-width: 100%;
+  max-height: calc(var(--box-height) - 54px);
+  object-fit: contain;
+}
+
 /* Non-header box */
 .twohop-links-box:not([class*=" "]) {
   border-top: 10px solid var(--bg-box-top);

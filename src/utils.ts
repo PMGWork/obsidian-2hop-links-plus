@@ -8,6 +8,20 @@ export function removeBlockReference(src: string): string {
   return src.replace(/#.*$/, "");
 }
 
+export function removeDisplayText(src: string): string {
+  return src.replace(/\|.*$/, "");
+}
+
+export function normalizeLinkTarget(src: string): string {
+  return removeDisplayText(removeBlockReference(src));
+}
+
+export function isImagePath(path: string): boolean {
+  return /\.(?:png|bmp|jpe?g|gif|svg|webp|avif|tiff?|ico|heic|heif)$/i.test(
+    normalizeLinkTarget(path)
+  );
+}
+
 export function formatDisplayTitle(src: string): string {
   return src.replace(/^tags:\s*/i, "").replace(/\.md$/i, "");
 }
