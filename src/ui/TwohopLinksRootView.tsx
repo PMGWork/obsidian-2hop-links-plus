@@ -47,8 +47,6 @@ function mergeTwoHopLinks(
     );
   };
 
-  twoHopLinks.forEach(appendLink);
-
   tagLinksList.forEach((tagLink) => {
     const sourcePath = tagLink.fileEntities[0]?.sourcePath ?? "";
     appendLink(
@@ -78,6 +76,8 @@ function mergeTwoHopLinks(
       )
     );
   });
+
+  twoHopLinks.forEach(appendLink);
 
   return mergedLinks;
 }

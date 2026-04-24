@@ -62,7 +62,15 @@
 }
 
 .twohop-links-box:hover {
-  filter: brightness(0.8) contrast(0.8);
+  filter: none;
+}
+
+.twohop-links-link-card:hover {
+  filter: brightness(0.97);
+}
+
+.twohop-links-header-card:hover {
+  filter: brightness(1.18) contrast(0.95);
 }
 
 .twohop-links-forward-links .twohop-links-connected-links-header,
@@ -100,8 +108,8 @@
   object-fit: contain;
 }
 
-/* Non-header box */
-.twohop-links-box:not([class*=" "]) {
+/* Link card */
+.twohop-links-link-card {
   border-top: 10px solid var(--bg-box-top);
 }
 

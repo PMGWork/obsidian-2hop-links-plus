@@ -83,13 +83,15 @@ const LinkComponent = React.memo(
               this.props.tagLink.key
                 ? `twohop-links-${this.props.tagLink.key}-header`
                 : ""
-            } twohop-links-properties-header twohop-links-box`}
+            } twohop-links-properties-header twohop-links-header-card twohop-links-box`}
           >
             {this.props.tagLink.key
               ? normalizeTagName(this.props.tagLink.key).toLowerCase() ===
                 "tags"
                 ? formatTagDisplayTitle(this.props.tagLink.property)
-                : `${formatDisplayTitle(this.props.tagLink.key)}: ${formatDisplayTitle(this.props.tagLink.property)}`
+                : `${formatDisplayTitle(
+                    this.props.tagLink.key
+                  )}: ${formatDisplayTitle(this.props.tagLink.property)}`
               : formatDisplayTitle(this.props.tagLink.property)}
           </div>
           {this.props.tagLink.fileEntities

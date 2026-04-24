@@ -1,4 +1,4 @@
-import { MarkdownView, Plugin, TFile, WorkspaceLeaf } from "obsidian";
+import { MarkdownView, Notice, Plugin, TFile, WorkspaceLeaf } from "obsidian";
 import React from "react";
 import ReactDOM from "react-dom";
 import { FileEntity } from "./model/FileEntity";
@@ -56,6 +56,14 @@ export default class TwohopLinksPlugin extends Plugin {
     );
     this.app.workspace.trigger("parse-style-settings");
 
+    this.addCommand({
+      id: "debug-twohop-links",
+      name: "Debug 2Hop Links",
+      callback: async () => {
+        await this.debugTwohopLinks();
+      },
+    });
+
     await this.renderTwohopLinks(true);
   }
 
@@ -68,6 +76,18 @@ export default class TwohopLinksPlugin extends Plugin {
     if (this.showLinksInMarkdown) {
       await this.renderTwohopLinks(true);
     }
+  }
+
+  private async debugTwohopLinks(): Promise<void> {
+    const activeFile = this.app.workspace.getActiveFile();
+    if (!activeFile) {
+      new Notice("2Hop Links Plus: active file not found");
+      return;
+    }
+
+    const snapshot = await this.links.getDebugSnapshot(activeFile);
+    console.log("2Hop Links Plus debug snapshot", snapshot);
+    new Notice("2Hop Links Plus: debug snapshot printed to console");
   }
 
   private async openFile(fileEntity: FileEntity): Promise<void> {

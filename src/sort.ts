@@ -39,16 +39,37 @@ export function getSortFunction(sortOrder: string) {
 }
 
 export function getTwoHopSortFunction(sortOrder: string) {
+  const compareByFilename = (a: any, b: any) =>
+    a.twoHopLinkEntity && b.twoHopLinkEntity
+      ? a.twoHopLinkEntity.link.linkText.localeCompare(
+          b.twoHopLinkEntity.link.linkText
+        )
+      : Math.random() - 0.5;
+  const compareByStat = (
+    a: any,
+    b: any,
+    key: "mtime" | "ctime",
+    desc: boolean
+  ) => {
+    const aValue = a.stat?.[key];
+    const bValue = b.stat?.[key];
+    if (aValue && bValue) {
+      return desc ? bValue - aValue : aValue - bValue;
+    }
+    if (aValue && !bValue) {
+      return -1;
+    }
+    if (!aValue && bValue) {
+      return 1;
+    }
+    return compareByFilename(a, b);
+  };
+
   switch (sortOrder) {
     case "random":
       return () => Math.random() - 0.5;
     case "filenameAsc":
-      return (a: any, b: any) =>
-        a.twoHopLinkEntity && b.twoHopLinkEntity
-          ? a.twoHopLinkEntity.link.linkText.localeCompare(
-              b.twoHopLinkEntity.link.linkText
-            )
-          : Math.random() - 0.5;
+      return compareByFilename;
     case "filenameDesc":
       return (a: any, b: any) =>
         a.twoHopLinkEntity && b.twoHopLinkEntity
@@ -57,13 +78,13 @@ export function getTwoHopSortFunction(sortOrder: string) {
             )
           : Math.random() - 0.5;
     case "modifiedDesc":
-      return (a: any, b: any) => b.stat.mtime - a.stat.mtime;
+      return (a: any, b: any) => compareByStat(a, b, "mtime", true);
     case "modifiedAsc":
-      return (a: any, b: any) => a.stat.mtime - b.stat.mtime;
+      return (a: any, b: any) => compareByStat(a, b, "mtime", false);
     case "createdDesc":
-      return (a: any, b: any) => b.stat.ctime - a.stat.ctime;
+      return (a: any, b: any) => compareByStat(a, b, "ctime", true);
     case "createdAsc":
-      return (a: any, b: any) => a.stat.ctime - b.stat.ctime;
+      return (a: any, b: any) => compareByStat(a, b, "ctime", false);
   }
 }
 

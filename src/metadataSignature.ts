@@ -82,6 +82,7 @@ function getFileMetadataSignature(
   app: App,
   file: TFile,
   options: {
+    trackLinks: boolean;
     trackTags: boolean;
     frontmatterKeys: string[];
     titleKey: string;
@@ -89,6 +90,10 @@ function getFileMetadataSignature(
 ): string {
   const cache = app.metadataCache.getFileCache(file);
   const parts = [file.path];
+
+  if (options.trackLinks) {
+    parts.push(`links:${getCacheLinks(cache).join(SIGNATURE_SEPARATOR)}`);
+  }
 
   if (options.trackTags) {
     parts.push(`tags:${getCacheTags(cache).join(SIGNATURE_SEPARATOR)}`);
@@ -118,6 +123,8 @@ export function getTwohopMetadataSignature(
   const activeTags = getCacheTags(activeCache);
   const frontmatterKeys = getConfiguredFrontmatterKeys(settings);
   const titleKey = settings.frontmatterPropertyKeyAsTitle.trim();
+  const trackLinks =
+    settings.showTwohopLinks || settings.showBackwardConnectedLinks;
   const trackTags = activeTags.length > 0;
 
   const parts = [
@@ -130,12 +137,13 @@ export function getTwohopMetadataSignature(
     )}`,
   ];
 
-  if (trackTags || frontmatterKeys.length > 0 || titleKey) {
+  if (trackLinks || trackTags || frontmatterKeys.length > 0 || titleKey) {
     const relatedMetadataSignatures = app.vault
       .getMarkdownFiles()
       .filter((file) => !shouldExcludePath(file.path, settings.excludePaths))
       .map((file) =>
         getFileMetadataSignature(app, file, {
+          trackLinks,
           trackTags,
           frontmatterKeys,
           titleKey,

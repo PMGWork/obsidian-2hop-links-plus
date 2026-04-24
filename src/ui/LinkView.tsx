@@ -155,7 +155,11 @@ export default class LinkView
   };
 
   render(): JSX.Element {
-    const className = ["twohop-links-box", this.props.className]
+    const className = [
+      "twohop-links-box",
+      "twohop-links-link-card",
+      this.props.className,
+    ]
       .filter(Boolean)
       .join(" ");
     const imageSrc = this.getImageSrc() ?? this.state.thumbnailSrc;

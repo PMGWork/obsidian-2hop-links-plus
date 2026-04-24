@@ -56,7 +56,8 @@ export class Links {
       const twoHopLinkSet = new Set<string>();
       twoHopLinks = await this.getTwohopLinks(
         activeFile,
-        this.app.metadataCache.resolvedLinks,
+        activeFileCache,
+        this.getTwohopLinkMap(),
         seenLinkSet,
         twoHopLinkSet
       );
@@ -311,12 +312,17 @@ export class Links {
 
   async getTwohopLinks(
     activeFile: TFile,
+    activeFileCache: CachedMetadata,
     links: Record<string, Record<string, number>>,
     forwardLinkSet: Set<string>,
     twoHopLinkSet: Set<string>
   ): Promise<TwohopLink[]> {
     const twoHopLinks: Record<string, FileEntity[]> = {};
-    const twohopLinkList = await this.aggregate2hopLinks(activeFile, links);
+    const twohopLinkList = await this.aggregate2hopLinks(
+      activeFile,
+      activeFileCache,
+      links
+    );
 
     if (twohopLinkList == null) {
       return [];
@@ -327,6 +333,9 @@ export class Links {
     if (twohopLinkList) {
       for (const k of Object.keys(twohopLinkList)) {
         if (twohopLinkList[k].length > 0) {
+          const isUnresolvedTwoHopLink =
+            this.app.metadataCache.getFirstLinkpathDest(k, activeFile.path) ==
+            null;
           twoHopLinks[k] = twohopLinkList[k]
             .filter(
               (it) =>
@@ -338,13 +347,15 @@ export class Links {
               if (
                 this.settings.enableDuplicateRemoval &&
                 (forwardLinkSet.has(removeBlockReference(linkText)) ||
-                  seenLinks.has(linkText))
+                  (!isUnresolvedTwoHopLink && seenLinks.has(linkText)))
               ) {
                 return null;
               }
-              seenLinks.add(linkText);
+              if (!isUnresolvedTwoHopLink) {
+                seenLinks.add(linkText);
+              }
               twoHopLinkSet.add(linkText);
-              return new FileEntity(activeFile.path, linkText);
+              return new FileEntity(it, linkText);
             })
             .filter((it) => it);
         }
@@ -370,10 +381,8 @@ export class Links {
       } else {
         linkKeys = [];
       }
-    } else if (links[activeFile.path]) {
-      linkKeys = Object.keys(links[activeFile.path]).filter(
-        (path) => path !== activeFile.path
-      );
+    } else {
+      linkKeys = this.getActiveFileLinkKeys(activeFile, activeFileCache, links);
     }
 
     const twoHopLinkEntities = (
@@ -386,13 +395,7 @@ export class Links {
             if (twoHopLinks[path]) {
               const sortedFileEntities = await this.getSortedFileEntities(
                 twoHopLinks[path],
-                (entity) => {
-                  const file = this.app.metadataCache.getFirstLinkpathDest(
-                    entity.linkText,
-                    entity.sourcePath
-                  );
-                  return file ? file.path : null;
-                },
+                (entity) => entity.sourcePath,
                 this.settings.sortOrder
               );
 
@@ -408,15 +411,23 @@ export class Links {
 
     const twoHopLinkStatsPromises = twoHopLinkEntities.map(
       async (twoHopLinkEntity) => {
-        const stat = await this.app.vault.adapter.stat(
-          twoHopLinkEntity.link.linkText
-        );
+        let stat = null;
+        try {
+          stat = await this.app.vault.adapter.stat(
+            twoHopLinkEntity.link.linkText
+          );
+        } catch (error) {
+          console.debug(
+            `Could not stat 2hop link: ${twoHopLinkEntity.link.linkText}`,
+            error
+          );
+        }
         return { twoHopLinkEntity, stat };
       }
     );
 
     const twoHopLinkStats = (await Promise.all(twoHopLinkStatsPromises)).filter(
-      (it) => it && it.twoHopLinkEntity && it.stat
+      (it) => it && it.twoHopLinkEntity
     );
 
     const twoHopSortFunction = getTwoHopSortFunction(this.settings.sortOrder);
@@ -433,17 +444,121 @@ export class Links {
       .filter((it) => it.fileEntities.length > 0);
   }
 
+  getTwohopLinkMap(): Record<string, Record<string, number>> {
+    const links: Record<string, Record<string, number>> = {};
+    const addLinks = (
+      sourceLinks: Record<string, Record<string, number>> | null | undefined,
+      normalizeDest: (dest: string) => string
+    ) => {
+      if (!sourceLinks) {
+        return;
+      }
+
+      for (const src of Object.keys(sourceLinks)) {
+        links[src] = links[src] ?? {};
+        for (const dest of Object.keys(sourceLinks[src])) {
+          const normalizedDest = normalizeDest(dest);
+          if (!normalizedDest || isImagePath(normalizedDest)) {
+            continue;
+          }
+          links[src][normalizedDest] =
+            (links[src][normalizedDest] ?? 0) + sourceLinks[src][dest];
+        }
+      }
+    };
+
+    addLinks(this.app.metadataCache.resolvedLinks, (dest) => dest);
+    addLinks(this.app.metadataCache.unresolvedLinks, (dest) =>
+      normalizeLinkTarget(dest)
+    );
+
+    return links;
+  }
+
+  async getDebugSnapshot(activeFile: TFile): Promise<Record<string, unknown>> {
+    const activeFileCache = this.app.metadataCache.getFileCache(activeFile);
+    const twohopLinkMap = this.getTwohopLinkMap();
+    const activeFileLinkKeys = this.getActiveFileLinkKeys(
+      activeFile,
+      activeFileCache,
+      twohopLinkMap
+    );
+    const aggregate = await this.aggregate2hopLinks(
+      activeFile,
+      activeFileCache,
+      twohopLinkMap
+    );
+    const twoHopLinks = await this.getTwohopLinks(
+      activeFile,
+      activeFileCache,
+      twohopLinkMap,
+      new Set<string>(),
+      new Set<string>()
+    );
+    const rawCacheLinks = [
+      ...(activeFileCache?.links || []),
+      ...(activeFileCache?.embeds || []),
+      ...(activeFileCache?.frontmatterLinks || []),
+    ].map((link) => link.link);
+    const activeLinkKeyByVariant = this.getLinkKeyByVariant(
+      new Set(activeFileLinkKeys)
+    );
+    const matchingSources: Record<string, string[]> = {};
+    Object.entries(twohopLinkMap)
+      .filter(([src]) => src !== activeFile.path)
+      .forEach(([src, links]) => {
+        const matches = Object.keys(links).filter((dest) =>
+          Boolean(this.getMatchingLinkKey(dest, activeLinkKeyByVariant))
+        );
+        if (matches.length > 0) {
+          matchingSources[src] = matches;
+        }
+      });
+
+    return {
+      activeFile: activeFile.path,
+      settings: {
+        showTwohopLinks: this.settings.showTwohopLinks,
+        autoLoadTwoHopLinks: this.settings.autoLoadTwoHopLinks,
+        enableDuplicateRemoval: this.settings.enableDuplicateRemoval,
+        excludePaths: this.settings.excludePaths,
+        sortOrder: this.settings.sortOrder,
+      },
+      rawActiveCacheLinks: rawCacheLinks,
+      resolvedLinksFromActiveFile:
+        this.app.metadataCache.resolvedLinks?.[activeFile.path] ?? {},
+      unresolvedLinksFromActiveFile:
+        this.app.metadataCache.unresolvedLinks?.[activeFile.path] ?? {},
+      activeFileLinkKeys,
+      aggregate2hopLinks: aggregate,
+      matchingSources,
+      renderedTwoHopLinks: twoHopLinks.map((link) => ({
+        linkText: link.link.linkText,
+        sourcePath: link.link.sourcePath,
+        fileEntities: link.fileEntities.map((entity) => ({
+          linkText: entity.linkText,
+          sourcePath: entity.sourcePath,
+        })),
+      })),
+      counts: {
+        twohopLinkMapSources: Object.keys(twohopLinkMap).length,
+        activeFileLinkKeys: activeFileLinkKeys.length,
+        aggregate2hopLinks: Object.keys(aggregate).length,
+        renderedTwoHopLinks: twoHopLinks.length,
+      },
+    };
+  }
+
   async aggregate2hopLinks(
     activeFile: TFile,
+    activeFileCache: CachedMetadata,
     links: Record<string, Record<string, number>>
   ): Promise<Record<string, string[]>> {
     const result: Record<string, string[]> = {};
 
-    let activeFileLinks = new Set<string>();
-
-    if (links && activeFile && activeFile.path && links[activeFile.path]) {
-      activeFileLinks = new Set(Object.keys(links[activeFile.path]));
-    }
+    let activeFileLinks = new Set(
+      this.getActiveFileLinkKeys(activeFile, activeFileCache, links)
+    );
 
     if (activeFile.extension === "canvas") {
       const canvasContent = await this.app.vault.read(activeFile);
@@ -470,6 +585,8 @@ export class Links {
       }
     }
 
+    const activeLinkKeyByVariant = this.getLinkKeyByVariant(activeFileLinks);
+
     if (links) {
       for (const src of Object.keys(links)) {
         if (src == activeFile.path) {
@@ -478,17 +595,102 @@ export class Links {
         const link = links[src];
         if (link) {
           for (const dest of Object.keys(link)) {
-            if (activeFileLinks.has(dest)) {
-              if (!result[dest]) {
-                result[dest] = [];
+            const activeLinkKey = this.getMatchingLinkKey(
+              dest,
+              activeLinkKeyByVariant
+            );
+            if (activeLinkKey) {
+              if (!result[activeLinkKey]) {
+                result[activeLinkKey] = [];
               }
-              result[dest].push(src);
+              result[activeLinkKey].push(src);
             }
           }
         }
       }
     }
     return result;
+  }
+
+  getActiveFileLinkKeys(
+    activeFile: TFile,
+    activeFileCache: CachedMetadata,
+    links: Record<string, Record<string, number>>
+  ): string[] {
+    const linkKeys = new Set<string>();
+
+    if (links?.[activeFile.path]) {
+      Object.keys(links[activeFile.path]).forEach((path) => {
+        if (path !== activeFile.path) {
+          linkKeys.add(path);
+        }
+      });
+    }
+
+    const linkEntities = [
+      ...(activeFileCache?.links || []),
+      ...(activeFileCache?.embeds || []),
+      ...(activeFileCache?.frontmatterLinks || []),
+    ];
+
+    linkEntities.forEach((linkEntity) => {
+      const linkText = normalizeLinkTarget(linkEntity.link);
+      if (!linkText || isImagePath(linkText)) {
+        return;
+      }
+
+      const targetFile = this.app.metadataCache.getFirstLinkpathDest(
+        linkText,
+        activeFile.path
+      );
+      const linkKey = targetFile ? targetFile.path : linkText;
+      if (
+        linkKey !== activeFile.path &&
+        !shouldExcludePath(linkKey, this.settings.excludePaths)
+      ) {
+        linkKeys.add(linkKey);
+      }
+    });
+
+    return Array.from(linkKeys);
+  }
+
+  getLinkKeyByVariant(linkKeys: Set<string>): Map<string, string> {
+    const linkKeyByVariant = new Map<string, string>();
+    linkKeys.forEach((linkKey) => {
+      this.getLinkTargetVariants(linkKey).forEach((variant) => {
+        if (!linkKeyByVariant.has(variant)) {
+          linkKeyByVariant.set(variant, linkKey);
+        }
+      });
+    });
+    return linkKeyByVariant;
+  }
+
+  getMatchingLinkKey(
+    linkTarget: string,
+    linkKeyByVariant: Map<string, string>
+  ): string | null {
+    for (const variant of this.getLinkTargetVariants(linkTarget)) {
+      const linkKey = linkKeyByVariant.get(variant);
+      if (linkKey) {
+        return linkKey;
+      }
+    }
+    return null;
+  }
+
+  getLinkTargetVariants(linkTarget: string): string[] {
+    const normalizedLinkTarget = normalizeLinkTarget(linkTarget);
+    const withoutMarkdownExtension = normalizedLinkTarget.replace(/\.md$/i, "");
+    return Array.from(
+      new Set([
+        normalizedLinkTarget,
+        withoutMarkdownExtension,
+        filePathToLinkText(normalizedLinkTarget),
+        filePathToLinkText(withoutMarkdownExtension),
+      ])
+    ).filter((variant) => variant !== "");
   }
 
   async getLinksListOfFilesWithTags(
@@ -752,11 +954,21 @@ export class Links {
 
   async getSortedFileEntities(
     entities: FileEntity[],
-    sourcePathFn: (entity: FileEntity) => string,
+    sourcePathFn: (entity: FileEntity) => string | null | undefined,
     sortOrder: string
   ): Promise<FileEntity[]> {
     const statsPromises = entities.map(async (entity) => {
-      const stat = await this.app.vault.adapter.stat(sourcePathFn(entity));
+      const sourcePath = sourcePathFn(entity);
+      if (!sourcePath) {
+        return { entity, stat: null };
+      }
+
+      let stat = null;
+      try {
+        stat = await this.app.vault.adapter.stat(sourcePath);
+      } catch (error) {
+        console.debug(`Could not stat link entity: ${sourcePath}`, error);
+      }
       return { entity, stat };
     });
 
