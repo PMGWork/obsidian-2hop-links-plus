@@ -50,14 +50,20 @@ class LinkComponent extends React.Component<
       setIcon(this.loadMoreRef.current, "more-horizontal");
     }
 
-    const title = await this.props.getTitle(this.props.link.link)
+    await this.updateTitle();
+  }
+
+  async updateTitle() {
+    const title =
+      this.props.link.displayTitle ??
+      (await this.props.getTitle(this.props.link.link));
 
     this.setState({
       title: title
     });
   }
 
-  componentDidUpdate(prevProps: LinkComponentProps) {
+  async componentDidUpdate(prevProps: LinkComponentProps) {
     if (
       this.props.resetDisplayedEntitiesCount &&
       this.props.resetDisplayedEntitiesCount !==
@@ -66,6 +72,13 @@ class LinkComponent extends React.Component<
       this.setState({
         displayedEntitiesCount: this.props.initialDisplayedEntitiesCount,
       });
+    }
+
+    if (
+      this.props.link.link.key() !== prevProps.link.link.key() ||
+      this.props.link.displayTitle !== prevProps.link.displayTitle
+    ) {
+      await this.updateTitle();
     }
 
     if (this.loadMoreRef.current) {
@@ -82,17 +95,27 @@ class LinkComponent extends React.Component<
   };
 
   render(): JSX.Element {
+    const headerClassName =
+      "twohop-links-twohop-header twohop-links-box" +
+      (this.props.link.isHeaderClickable ? "" : " twohop-links-label-header");
+
     return (
       <div
         className={"twohop-links-section " + "twohop-links-resolved"}
         key={this.props.link.link.linkText}
       >
         <div
-          className={"twohop-links-twohop-header twohop-links-box"}
-          onClick={async () => this.props.onClick(this.props.link.link)}
-          onMouseDown={async (event) =>
-            event.button == 0 && this.props.onClick(this.props.link.link)
-          }
+          className={headerClassName}
+          onClick={async () => {
+            if (this.props.link.isHeaderClickable) {
+              await this.props.onClick(this.props.link.link);
+            }
+          }}
+          onMouseDown={async (event) => {
+            if (event.button == 0 && this.props.link.isHeaderClickable) {
+              await this.props.onClick(this.props.link.link);
+            }
+          }}
         >
           {this.state.title}
         </div>
@@ -129,9 +152,9 @@ class TwohopLinksView extends React.Component<TwohopLinksViewProps> {
       <div>
         {this.props.twoHopLinks
           .slice(0, this.props.displayedSectionCount)
-          .map((link, index) => (
+          .map((link) => (
             <MemoizedLinkComponent
-              key={index}
+              key={link.link.key()}
               link={link}
               onClick={this.props.onClick}
               getPreview={this.props.getPreview}

@@ -1,7 +1,9 @@
 import { App, CachedMetadata, TFile } from "obsidian";
 import { FileEntity } from "./model/FileEntity";
 import {
+  expandTagHierarchy,
   filePathToLinkText,
+  normalizeTagName,
   removeBlockReference,
   shouldExcludePath,
 } from "./utils";
@@ -478,7 +480,6 @@ export class Links {
 
     const activeFileTagSet = new Set(activeFileTags);
     const tagMap: Record<string, FileEntity[]> = {};
-    const seen: Record<string, boolean> = {};
 
     const markdownFiles = this.app.vault
       .getMarkdownFiles()
@@ -494,7 +495,7 @@ export class Links {
 
       const fileTags = this.getTagsFromCache(
         cachedMetadata,
-        this.settings.excludePaths
+        this.settings.excludeTags
       );
 
       for (const tag of fileTags) {
@@ -504,9 +505,7 @@ export class Links {
 
         if (
           this.settings.enableDuplicateRemoval &&
-          (seen[markdownFile.path] ||
-            forwardLinkSet.has(filePathToLinkText(markdownFile.path)) ||
-            twoHopLinkSet.has(filePathToLinkText(markdownFile.path)))
+          forwardLinkSet.has(filePathToLinkText(markdownFile.path))
         )
           continue;
 
@@ -675,14 +674,15 @@ export class Links {
     cache: CachedMetadata | null | undefined,
     excludeTags: string[]
   ): string[] {
-    let tags: string[] = [];
+    const tags: string[] = [];
+    const addTagWithHierarchy = (tag: string) => {
+      tags.push(...expandTagHierarchy(tag));
+    };
+
     if (cache) {
       if (cache.tags) {
         cache.tags.forEach((it) => {
-          const tagHierarchy = it.tag.replace("#", "").split("/");
-          for (let i = 0; i < tagHierarchy.length; i++) {
-            tags.push(tagHierarchy.slice(0, i + 1).join("/"));
-          }
+          addTagWithHierarchy(it.tag);
         });
       }
 
@@ -690,10 +690,7 @@ export class Links {
         if (Array.isArray(cache.frontmatter.tags)) {
           cache.frontmatter.tags.forEach((tag) => {
             if (typeof tag === "string") {
-              const tagHierarchy = tag.split("/");
-              for (let i = 0; i < tagHierarchy.length; i++) {
-                tags.push(tagHierarchy.slice(0, i + 1).join("/"));
-              }
+              addTagWithHierarchy(tag);
             }
           });
         } else if (typeof cache.frontmatter.tags === "string") {
@@ -701,10 +698,7 @@ export class Links {
             .split(",")
             .map((tag) => tag.trim())
             .forEach((tag) => {
-              const tagHierarchy = tag.split("/");
-              for (let i = 0; i < tagHierarchy.length; i++) {
-                tags.push(tagHierarchy.slice(0, i + 1).join("/"));
-              }
+              addTagWithHierarchy(tag);
             });
         }
       }
@@ -712,13 +706,18 @@ export class Links {
 
     return tags.filter((tag) => {
       for (const excludeTag of excludeTags) {
+        const normalizedExcludeTag = normalizeTagName(excludeTag);
         if (
-          excludeTag.endsWith("/") &&
-          (tag === excludeTag.slice(0, -1) || tag.startsWith(excludeTag))
+          normalizedExcludeTag.endsWith("/") &&
+          (tag === normalizedExcludeTag.slice(0, -1) ||
+            tag.startsWith(normalizedExcludeTag))
         ) {
           return false;
         }
-        if (!excludeTag.endsWith("/") && tag === excludeTag) {
+        if (
+          !normalizedExcludeTag.endsWith("/") &&
+          tag === normalizedExcludeTag
+        ) {
           return false;
         }
       }

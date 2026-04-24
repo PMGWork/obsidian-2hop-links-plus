@@ -3,6 +3,11 @@ import { FileEntity } from "../model/FileEntity";
 import LinkView from "./LinkView";
 import { PropertiesLinks } from "../model/PropertiesLinks";
 import { App, setIcon } from "obsidian";
+import {
+  formatDisplayTitle,
+  formatTagDisplayTitle,
+  normalizeTagName,
+} from "../utils";
 
 interface PropertiesLinksListViewProps {
   propertiesLinksList: PropertiesLinks[];
@@ -81,8 +86,11 @@ const LinkComponent = React.memo(
             } twohop-links-properties-header twohop-links-box`}
           >
             {this.props.tagLink.key
-              ? `${this.props.tagLink.key}: ${this.props.tagLink.property}`
-              : this.props.tagLink.property}
+              ? normalizeTagName(this.props.tagLink.key).toLowerCase() ===
+                "tags"
+                ? formatTagDisplayTitle(this.props.tagLink.property)
+                : `${formatDisplayTitle(this.props.tagLink.key)}: ${formatDisplayTitle(this.props.tagLink.property)}`
+              : formatDisplayTitle(this.props.tagLink.property)}
           </div>
           {this.props.tagLink.fileEntities
             .slice(0, this.state.displayedEntitiesCount)

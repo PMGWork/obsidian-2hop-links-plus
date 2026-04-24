@@ -6,7 +6,94 @@ import ConnectedLinksView from "./ConnectedLinksView";
 import NewLinksView from "./NewLinksView";
 import { PropertiesLinks } from "../model/PropertiesLinks";
 import { App, setIcon } from "obsidian";
-import PropertiesLinksListView from "./TagLinksListView";
+import {
+  formatDisplayTitle,
+  formatTagDisplayTitle,
+  normalizeTagName,
+} from "../utils";
+
+function mergeTwoHopLinks(
+  twoHopLinks: TwohopLink[],
+  tagLinksList: PropertiesLinks[],
+  frontmatterKeyLinksList: PropertiesLinks[]
+): TwohopLink[] {
+  const mergedLinks: TwohopLink[] = [];
+  const linkIndexByKey: Record<string, number> = {};
+
+  const appendLink = (link: TwohopLink) => {
+    const linkKey = link.link.key();
+    const existingIndex = linkIndexByKey[linkKey];
+
+    if (existingIndex == null) {
+      linkIndexByKey[linkKey] = mergedLinks.length;
+      mergedLinks.push(
+        new TwohopLink(
+          link.link,
+          dedupeFileEntities(link.fileEntities),
+          link.displayTitle,
+          link.isHeaderClickable
+        )
+      );
+      return;
+    }
+
+    mergedLinks[existingIndex] = new TwohopLink(
+      mergedLinks[existingIndex].link,
+      dedupeFileEntities([
+        ...mergedLinks[existingIndex].fileEntities,
+        ...link.fileEntities,
+      ]),
+      mergedLinks[existingIndex].displayTitle ?? link.displayTitle,
+      mergedLinks[existingIndex].isHeaderClickable && link.isHeaderClickable
+    );
+  };
+
+  twoHopLinks.forEach(appendLink);
+
+  tagLinksList.forEach((tagLink) => {
+    const sourcePath = tagLink.fileEntities[0]?.sourcePath ?? "";
+    appendLink(
+      new TwohopLink(
+        new FileEntity(sourcePath, normalizeTagName(tagLink.property)),
+        tagLink.fileEntities,
+        formatTagDisplayTitle(tagLink.property),
+        false
+      )
+    );
+  });
+
+  frontmatterKeyLinksList.forEach((propertyLink) => {
+    const sourcePath = propertyLink.fileEntities[0]?.sourcePath ?? "";
+    const title = propertyLink.key
+      ? `${formatDisplayTitle(propertyLink.key)}: ${formatDisplayTitle(
+          propertyLink.property
+        )}`
+      : formatDisplayTitle(propertyLink.property);
+
+    appendLink(
+      new TwohopLink(
+        new FileEntity(sourcePath, formatDisplayTitle(propertyLink.property)),
+        propertyLink.fileEntities,
+        title,
+        false
+      )
+    );
+  });
+
+  return mergedLinks;
+}
+
+function dedupeFileEntities(fileEntities: FileEntity[]): FileEntity[] {
+  const seen: Record<string, boolean> = {};
+
+  return fileEntities.filter((fileEntity) => {
+    const key = fileEntity.key();
+    if (seen[key]) return false;
+
+    seen[key] = true;
+    return true;
+  });
+}
 
 interface TwohopLinksRootViewProps {
   forwardConnectedLinks: FileEntity[];
@@ -23,8 +110,6 @@ interface TwohopLinksRootViewProps {
   showBackwardConnectedLinks: boolean;
   showTwohopLinks: boolean;
   showNewLinks: boolean;
-  showTagsLinks: boolean;
-  showPropertiesLinks: boolean;
   autoLoadTwoHopLinks: boolean;
   initialBoxCount: number;
   initialSectionCount: number;
@@ -34,9 +119,7 @@ type Category =
   | "forwardConnectedLinks"
   | "backwardConnectedLinks"
   | "twoHopLinks"
-  | "newLinks"
-  | "tagLinksList"
-  | "frontmatterKeyLinksList";
+  | "newLinks";
 
 interface TwohopLinksRootViewState {
   displayedBoxCount: Record<Category, number>;
@@ -54,8 +137,6 @@ export default class TwohopLinksRootView extends React.Component<
     newLinks: createRef(),
     backwardConnectedLinks: createRef(),
     twoHopLinks: createRef(),
-    tagLinksList: createRef(),
-    frontmatterKeyLinksList: createRef(),
   };
 
   constructor(props: TwohopLinksRootViewProps) {
@@ -66,16 +147,12 @@ export default class TwohopLinksRootView extends React.Component<
         newLinks: props.initialBoxCount,
         backwardConnectedLinks: props.initialBoxCount,
         twoHopLinks: props.initialBoxCount,
-        tagLinksList: props.initialBoxCount,
-        frontmatterKeyLinksList: props.initialBoxCount,
       },
       displayedSectionCount: {
         forwardConnectedLinks: props.initialSectionCount,
         newLinks: props.initialSectionCount,
         backwardConnectedLinks: props.initialSectionCount,
         twoHopLinks: props.initialSectionCount,
-        tagLinksList: props.initialSectionCount,
-        frontmatterKeyLinksList: props.initialSectionCount,
       },
       prevProps: null,
       isLoaded: props.autoLoadTwoHopLinks,
@@ -121,16 +198,12 @@ export default class TwohopLinksRootView extends React.Component<
           backwardConnectedLinks: this.props.initialBoxCount,
           twoHopLinks: this.props.initialBoxCount,
           newLinks: this.props.initialBoxCount,
-          tagLinksList: this.props.initialBoxCount,
-          frontmatterKeyLinksList: this.props.initialBoxCount,
         },
         displayedSectionCount: {
           forwardConnectedLinks: this.props.initialSectionCount,
           newLinks: this.props.initialSectionCount,
           backwardConnectedLinks: this.props.initialSectionCount,
           twoHopLinks: this.props.initialSectionCount,
-          tagLinksList: this.props.initialSectionCount,
-          frontmatterKeyLinksList: this.props.initialSectionCount,
         },
         prevProps: this.props,
         isLoaded: this.props.autoLoadTwoHopLinks,
@@ -149,11 +222,14 @@ export default class TwohopLinksRootView extends React.Component<
       showBackwardConnectedLinks,
       showTwohopLinks,
       showNewLinks,
-      showTagsLinks,
-      showPropertiesLinks,
       autoLoadTwoHopLinks,
     } = this.props;
     const { isLoaded } = this.state;
+    const relatedTwoHopLinks = mergeTwoHopLinks(
+      showTwohopLinks ? this.props.twoHopLinks : [],
+      this.props.tagLinksList,
+      this.props.frontmatterKeyLinksList
+    );
 
     if (!autoLoadTwoHopLinks && !isLoaded) {
       return (
@@ -207,9 +283,9 @@ export default class TwohopLinksRootView extends React.Component<
             app={this.props.app}
           />
         )}
-        {showTwohopLinks && (
+        {relatedTwoHopLinks.length > 0 && (
           <TwohopLinksView
-            twoHopLinks={this.props.twoHopLinks}
+            twoHopLinks={relatedTwoHopLinks}
             onClick={this.props.onClick}
             getPreview={this.props.getPreview}
             getTitle={this.props.getTitle}
@@ -220,7 +296,7 @@ export default class TwohopLinksRootView extends React.Component<
           />
         )}
         {this.state.displayedSectionCount.twoHopLinks <
-          this.props.twoHopLinks.length && (
+          relatedTwoHopLinks.length && (
           <button
             ref={this.loadMoreRefs.twoHopLinks}
             className="load-more-button"
@@ -239,54 +315,6 @@ export default class TwohopLinksRootView extends React.Component<
             onLoadMore={() => this.loadMoreBox("newLinks")}
             app={this.props.app}
           />
-        )}
-        {showTagsLinks && (
-          <PropertiesLinksListView
-            propertiesLinksList={this.props.tagLinksList}
-            onClick={this.props.onClick}
-            getPreview={this.props.getPreview}
-            getTitle={this.props.getTitle}
-            app={this.props.app}
-            displayedSectionCount={
-              this.state.displayedSectionCount.tagLinksList
-            }
-            initialDisplayedEntitiesCount={this.props.initialBoxCount}
-            resetDisplayedEntitiesCount={this.props !== this.state.prevProps}
-          />
-        )}
-        {this.state.displayedSectionCount.tagLinksList <
-          this.props.tagLinksList.length && (
-          <button
-            ref={this.loadMoreRefs.tagLinksList}
-            className="load-more-button"
-            onClick={() => this.loadMoreSections("tagLinksList")}
-          >
-            Load more
-          </button>
-        )}
-        {showPropertiesLinks && (
-          <PropertiesLinksListView
-            propertiesLinksList={this.props.frontmatterKeyLinksList}
-            onClick={this.props.onClick}
-            getPreview={this.props.getPreview}
-            getTitle={this.props.getTitle}
-            app={this.props.app}
-            displayedSectionCount={
-              this.state.displayedSectionCount.frontmatterKeyLinksList
-            }
-            initialDisplayedEntitiesCount={this.props.initialBoxCount}
-            resetDisplayedEntitiesCount={this.props !== this.state.prevProps}
-          />
-        )}
-        {this.state.displayedSectionCount.frontmatterKeyLinksList <
-          this.props.frontmatterKeyLinksList.length && (
-          <button
-            ref={this.loadMoreRefs.frontmatterKeyLinksList}
-            className="load-more-button"
-            onClick={() => this.loadMoreSections("frontmatterKeyLinksList")}
-          >
-            Load more
-          </button>
         )}
       </div>
     );

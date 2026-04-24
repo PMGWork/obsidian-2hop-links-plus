@@ -8,9 +8,6 @@ export interface TwohopPluginSettings {
   showBackwardConnectedLinks: boolean;
   showTwohopLinks: boolean;
   showNewLinks: boolean;
-  showTagsLinks: boolean;
-  showPropertiesLinks: boolean;
-  showImage: boolean;
   excludePaths: string[];
   initialBoxCount: number;
   initialSectionCount: number;
@@ -80,17 +77,6 @@ export class TwohopSettingTab extends PluginSettingTab {
       "",
       "showNewLinks"
     );
-    this.createToggleSetting(
-      "Show Tags Links",
-      "",
-      "showTagsLinks"
-    );
-    this.createToggleSetting(
-      "Show Properties Links",
-      "",
-      "showPropertiesLinks"
-    );
-    this.createToggleSetting("Show Image in the 2hop Links", "", "showImage");
     this.createTextAreaSetting(
       "Exclude Paths",
       "List of file or folder paths to exclude, one per line.",

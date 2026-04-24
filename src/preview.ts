@@ -5,14 +5,7 @@ export async function readPreview(fileEntity: FileEntity) {
   const linkText = removeBlockReference(fileEntity.linkText);
 
   if (fileEntity.linkText.match(/\.(png|bmp|jpg|jpeg)$/i)) {
-    const file = this.app.metadataCache.getFirstLinkpathDest(
-      linkText,
-      fileEntity.sourcePath
-    );
-    if (file) {
-      const resourcePath = this.app.vault.getResourcePath(file);
-      return resourcePath;
-    }
+    return "";
   }
 
   if (
@@ -42,42 +35,6 @@ export async function readPreview(fileEntity: FileEntity) {
   }
   const content = await this.app.vault.cachedRead(file);
 
-  const combinedMatch = content.match(
-    /<iframe[^>]*src="([^"]+)"[^>]*>|!\[[^\]]*\]\((https:\/\/www\.youtube\.com\/embed\/[^\)]+|https:\/\/www\.youtube\.com\/watch\?v=[^\)]+|https:\/\/youtu\.be\/[^\)]+)\)|!\[(?:[^\]]*?)\]\(((?!https?:\/\/twitter\.com\/)[^\)]+?(?:png|bmp|jpg|jpeg))\)|!\[\[([^\]]+.(?:png|bmp|jpg|jpeg))\]\]/
-  );
-  if (combinedMatch) {
-    const iframeUrl = combinedMatch[1];
-    const youtubeEmbedUrl = combinedMatch[2];
-    const img = combinedMatch[3] || combinedMatch[4];
-    if (iframeUrl) {
-      const thumbnailUrl = getThumbnailUrlFromIframeUrl(iframeUrl);
-      if (thumbnailUrl) {
-        return thumbnailUrl;
-      }
-    } else if (youtubeEmbedUrl) {
-      const youtubeThumbnailUrl = getThumbnailUrlFromIframeUrl(youtubeEmbedUrl);
-      if (youtubeThumbnailUrl) {
-        return youtubeThumbnailUrl;
-      }
-    } else if (img) {
-      console.debug(`Found image: ${img}`);
-      if (img.match(/^https?:\/\//)) {
-        return img;
-      } else {
-        const file = this.app.metadataCache.getFirstLinkpathDest(
-          img,
-          fileEntity.sourcePath
-        );
-        console.debug(`Found image: ${img} = file=${file}`);
-        if (file) {
-          const resourcePath = this.app.vault.getResourcePath(file);
-          console.debug(`Found image: ${img} resourcePath=${resourcePath}`);
-          return resourcePath;
-        }
-      }
-    }
-  }
-
   const updatedContent = content.replace(/^(.*\n)?---[\s\S]*?---\n?/m, "");
   const lines = shortenExternalLinkInPreview(updatedContent).split(/\n/);
   return lines
@@ -86,19 +43,6 @@ export async function readPreview(fileEntity: FileEntity) {
     })
     .slice(0, 6)
     .join("\n");
-}
-
-export function getThumbnailUrlFromIframeUrl(iframeUrl: string): string | null {
-  const youtubeIdMatch = iframeUrl.match(
-    /(?:https?:\/\/)?(?:www\.)?youtube\.com\/embed\/([^?&]+)(?:\?[^?]+)?$|(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?v=([^?&]+)(?:\?[^?]+)?$|(?:https?:\/\/)?(?:youtu\.be\/)([^?&]+)(?:\?[^?]+)?$/
-  );
-  if (youtubeIdMatch) {
-    const youtubeId =
-      youtubeIdMatch[1] || youtubeIdMatch[2] || youtubeIdMatch[3];
-    return `https://img.youtube.com/vi/${youtubeId}/mqdefault.jpg`;
-  }
-
-  return null;
 }
 
 export function shortenExternalLinkInPreview(content: string): string {

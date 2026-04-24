@@ -65,6 +65,18 @@
   filter: brightness(0.8) contrast(0.8);
 }
 
+.twohop-links-forward-links .twohop-links-connected-links-header,
+.twohop-links-back-links .twohop-links-connected-links-header,
+.twohop-links-label-header {
+  cursor: default;
+}
+
+.twohop-links-forward-links .twohop-links-connected-links-header:hover,
+.twohop-links-back-links .twohop-links-connected-links-header:hover,
+.twohop-links-label-header:hover {
+  filter: none;
+}
+
 .twohop-links-box-title {
   color: var(--title-box);
   font-size: 90%;

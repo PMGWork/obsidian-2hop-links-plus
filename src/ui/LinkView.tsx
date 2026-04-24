@@ -186,12 +186,7 @@ export default class LinkView
           {this.state.title}
         </div>
         <div className={"twohop-links-box-preview"}>
-          {this.state.preview &&
-          this.state.preview.match(/^(app|https?):\/\//) ? (
-            <img src={this.state.preview} alt={"preview image"} />
-          ) : (
-            <div>{this.state.preview}</div>
-          )}
+          <div>{this.state.preview}</div>
         </div>
       </div>
     );
