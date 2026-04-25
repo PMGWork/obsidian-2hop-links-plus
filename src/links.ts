@@ -19,6 +19,8 @@ import {
 } from "./sort";
 import { PropertiesLinks } from "./model/PropertiesLinks";
 
+type SortStat = { mtime?: number; ctime?: number } | null;
+
 export class Links {
   app: App;
   settings: any;
@@ -42,6 +44,7 @@ export class Links {
     let twoHopLinks: TwohopLink[] = [];
     let tagLinksList: PropertiesLinks[] = [];
     let frontmatterKeyLinksList: PropertiesLinks[] = [];
+    const markdownFiles = this.getFilteredMarkdownFiles();
 
     if (activeFile) {
       const activeFileCache: CachedMetadata =
@@ -51,7 +54,11 @@ export class Links {
         activeFileCache
       ));
       const seenLinkSet = new Set<string>(forwardLinks.map((it) => it.key()));
-      backwardLinks = await this.getBackLinks(activeFile, seenLinkSet);
+      backwardLinks = await this.getBackLinks(
+        activeFile,
+        seenLinkSet,
+        this.getFilteredCanvasFiles()
+      );
       backwardLinks.forEach((link) => seenLinkSet.add(link.key()));
       const twoHopLinkSet = new Set<string>();
       twoHopLinks = await this.getTwohopLinks(
@@ -62,30 +69,19 @@ export class Links {
         twoHopLinkSet
       );
 
-      tagLinksList = await this.getLinksListOfFilesWithTags(
+      ({
+        tagLinksList,
+        frontmatterKeyLinksList,
+      } = await this.getLinksListOfFilesWithTagsAndFrontmatterKeys(
         activeFile,
         activeFileCache,
+        markdownFiles,
         seenLinkSet,
         twoHopLinkSet
-      );
-
-      frontmatterKeyLinksList =
-        await this.getLinksListOfFilesWithFrontmatterKeys(
-          activeFile,
-          activeFileCache,
-          seenLinkSet,
-          twoHopLinkSet
-        );
+      ));
     } else {
-      const allMarkdownFiles = this.app.vault
-        .getMarkdownFiles()
-        .filter(
-          (file: { path: string }) =>
-            !shouldExcludePath(file.path, this.settings.excludePaths)
-        );
-
       const sortedFiles = await getSortedFiles(
-        allMarkdownFiles,
+        markdownFiles,
         getSortFunctionForFile(this.settings.sortOrder)
       );
 
@@ -100,6 +96,34 @@ export class Links {
       tagLinksList,
       frontmatterKeyLinksList,
     };
+  }
+
+  private getFilteredMarkdownFiles(): TFile[] {
+    return this.app.vault
+      .getMarkdownFiles()
+      .filter(
+        (file: TFile) =>
+          !shouldExcludePath(file.path, this.settings.excludePaths)
+      );
+  }
+
+  private getFilteredCanvasFiles(): TFile[] {
+    return this.app.vault
+      .getFiles()
+      .filter(
+        (file: TFile) =>
+          file.extension === "canvas" &&
+          !shouldExcludePath(file.path, this.settings.excludePaths)
+      );
+  }
+
+  private sortOrderNeedsStat(sortOrder: string): boolean {
+    return (
+      sortOrder === "modifiedDesc" ||
+      sortOrder === "modifiedAsc" ||
+      sortOrder === "createdDesc" ||
+      sortOrder === "createdAsc"
+    );
   }
 
   async getForwardLinks(
@@ -239,7 +263,8 @@ export class Links {
 
   async getBackLinks(
     activeFile: TFile,
-    forwardLinkSet: Set<string>
+    forwardLinkSet: Set<string>,
+    canvasFiles: TFile[]
   ): Promise<FileEntity[]> {
     const name = activeFile.path;
     const resolvedLinks: Record<string, Record<string, number>> = this.app
@@ -265,11 +290,6 @@ export class Links {
         }
       }
     }
-
-    const allFiles: TFile[] = this.app.vault.getFiles();
-    const canvasFiles: TFile[] = allFiles.filter(
-      (file) => file.extension === "canvas"
-    );
 
     for (const canvasFile of canvasFiles) {
       if (canvasFile.path === activeFile.path) {
@@ -409,26 +429,17 @@ export class Links {
       )
     ).filter((it) => it);
 
-    const twoHopLinkStatsPromises = twoHopLinkEntities.map(
-      async (twoHopLinkEntity) => {
-        let stat = null;
-        try {
-          stat = await this.app.vault.adapter.stat(
-            twoHopLinkEntity.link.linkText
-          );
-        } catch (error) {
-          console.debug(
-            `Could not stat 2hop link: ${twoHopLinkEntity.link.linkText}`,
-            error
-          );
-        }
-        return { twoHopLinkEntity, stat };
-      }
-    );
-
-    const twoHopLinkStats = (await Promise.all(twoHopLinkStatsPromises)).filter(
-      (it) => it && it.twoHopLinkEntity
-    );
+    const twoHopLinkStats = this.sortOrderNeedsStat(this.settings.sortOrder)
+      ? await Promise.all(
+          twoHopLinkEntities.map(async (twoHopLinkEntity) => ({
+            twoHopLinkEntity,
+            stat: await this.getSortStatForPath(twoHopLinkEntity.link.linkText),
+          }))
+        )
+      : twoHopLinkEntities.map((twoHopLinkEntity) => ({
+          twoHopLinkEntity,
+          stat: null,
+        }));
 
     const twoHopSortFunction = getTwoHopSortFunction(this.settings.sortOrder);
     twoHopLinkStats.sort(twoHopSortFunction);
@@ -693,126 +704,87 @@ export class Links {
     ).filter((variant) => variant !== "");
   }
 
-  async getLinksListOfFilesWithTags(
+  async getLinksListOfFilesWithTagsAndFrontmatterKeys(
     activeFile: TFile,
     activeFileCache: CachedMetadata,
+    markdownFiles: TFile[],
     forwardLinkSet: Set<string>,
     twoHopLinkSet: Set<string>
-  ): Promise<PropertiesLinks[]> {
+  ): Promise<{
+    tagLinksList: PropertiesLinks[];
+    frontmatterKeyLinksList: PropertiesLinks[];
+  }> {
     const activeFileTags = this.getTagsFromCache(
       activeFileCache,
       this.settings.excludeTags
     );
-    if (activeFileTags.length === 0) return [];
-
     const activeFileTagSet = new Set(activeFileTags);
     const tagMap: Record<string, FileEntity[]> = {};
+    const tagEntitySeen: Record<string, boolean> = {};
 
-    const markdownFiles = this.app.vault
-      .getMarkdownFiles()
-      .filter(
-        (markdownFile: TFile) =>
-          markdownFile !== activeFile &&
-          !shouldExcludePath(markdownFile.path, this.settings.excludePaths)
-      );
+    const activeFileFrontmatter = activeFileCache.frontmatter;
+    const frontmatterKeyMap: Record<string, Record<string, FileEntity[]>> = {};
+    const frontmatterSeen: Record<string, boolean> = {};
+    const activeFrontmatterValuesByKey: Record<string, string[]> = {};
 
-    for (const markdownFile of markdownFiles) {
-      const cachedMetadata = this.app.metadataCache.getFileCache(markdownFile);
-      if (!cachedMetadata) continue;
-
-      const fileTags = this.getTagsFromCache(
-        cachedMetadata,
-        this.settings.excludeTags
-      );
-
-      for (const tag of fileTags) {
-        if (!activeFileTagSet.has(tag)) continue;
-
-        tagMap[tag] = tagMap[tag] ?? [];
-
-        if (
-          this.settings.enableDuplicateRemoval &&
-          forwardLinkSet.has(filePathToLinkText(markdownFile.path))
-        )
-          continue;
-
-        const linkText = filePathToLinkText(markdownFile.path);
-        const newFileEntity = new FileEntity(activeFile.path, linkText);
-
-        if (
-          !tagMap[tag].some(
-            (existingEntity) =>
-              existingEntity.sourcePath === newFileEntity.sourcePath &&
-              existingEntity.linkText === newFileEntity.linkText
-          )
-        ) {
-          tagMap[tag].push(newFileEntity);
+    if (activeFileFrontmatter) {
+      for (const key of this.settings.frontmatterKeys) {
+        const values = this.getStringValues(activeFileFrontmatter[key]);
+        if (values.length > 0) {
+          activeFrontmatterValuesByKey[key] = values;
         }
       }
     }
 
-    const tagLinksEntities = await this.createPropertiesLinkEntities(
-      this.settings,
-      tagMap,
-      "tags"
-    );
+    const shouldCollectTags = activeFileTagSet.size > 0;
+    const shouldCollectFrontmatter =
+      Object.keys(activeFrontmatterValuesByKey).length > 0;
 
-    const sortFunction = getTagHierarchySortFunction(this.settings.sortOrder);
-    return tagLinksEntities.sort(sortFunction);
-  }
-
-  async getLinksListOfFilesWithFrontmatterKeys(
-    activeFile: TFile,
-    activeFileCache: CachedMetadata,
-    forwardLinkSet: Set<string>,
-    twoHopLinkSet: Set<string>
-  ): Promise<PropertiesLinks[]> {
-    const activeFileFrontmatter = activeFileCache.frontmatter;
-    if (!activeFileFrontmatter) return [];
-
-    const frontmatterKeyMap: Record<string, Record<string, FileEntity[]>> = {};
-    const seen: Record<string, boolean> = {};
-
-    const markdownFiles = this.app.vault
-      .getMarkdownFiles()
-      .filter(
-        (markdownFile: TFile) =>
-          markdownFile !== activeFile &&
-          !shouldExcludePath(markdownFile.path, this.settings.excludePaths)
-      );
+    if (!shouldCollectTags && !shouldCollectFrontmatter) {
+      return { tagLinksList: [], frontmatterKeyLinksList: [] };
+    }
 
     for (const markdownFile of markdownFiles) {
+      if (markdownFile === activeFile) continue;
+
       const cachedMetadata = this.app.metadataCache.getFileCache(markdownFile);
       if (!cachedMetadata) continue;
 
-      const fileFrontmatter = cachedMetadata.frontmatter;
-      if (!fileFrontmatter) continue;
+      const linkText = filePathToLinkText(markdownFile.path);
 
-      for (const [key, value] of Object.entries(fileFrontmatter)) {
-        if (!this.settings.frontmatterKeys.includes(key)) continue;
+      if (shouldCollectTags) {
+        const fileTags = this.getTagsFromCache(
+          cachedMetadata,
+          this.settings.excludeTags
+        );
 
-        let values: string[] = [];
-        let activeValues: string[] = [];
-
-        if (typeof value === "string") {
-          values.push(value);
-        } else if (Array.isArray(value)) {
-          values.push(...value);
-        } else {
-          continue;
-        }
-
-        if (activeFileFrontmatter[key]) {
-          if (typeof activeFileFrontmatter[key] === "string") {
-            activeValues.push(activeFileFrontmatter[key]);
-          } else if (Array.isArray(activeFileFrontmatter[key])) {
-            activeValues.push(...activeFileFrontmatter[key]);
-          } else {
+        for (const tag of fileTags) {
+          if (!activeFileTagSet.has(tag)) continue;
+          if (
+            this.settings.enableDuplicateRemoval &&
+            forwardLinkSet.has(linkText)
+          ) {
             continue;
           }
-        } else {
-          continue;
+
+          const seenKey = `${tag}\u001f${markdownFile.path}`;
+          if (tagEntitySeen[seenKey]) continue;
+
+          tagEntitySeen[seenKey] = true;
+          tagMap[tag] = tagMap[tag] ?? [];
+          tagMap[tag].push(new FileEntity(activeFile.path, linkText));
         }
+      }
+
+      if (!shouldCollectFrontmatter || !cachedMetadata.frontmatter) {
+        continue;
+      }
+
+      for (const [key, activeValues] of Object.entries(
+        activeFrontmatterValuesByKey
+      )) {
+        const values = this.getStringValues(cachedMetadata.frontmatter[key]);
+        if (values.length === 0) continue;
 
         for (const activeValue of activeValues) {
           const activeValueHierarchy = activeValue.split("/");
@@ -822,9 +794,6 @@ export class Links {
               .join("/");
 
             for (const value of values) {
-              if (typeof value !== "string") {
-                continue;
-              }
               const valueHierarchy = value.split("/");
               const hierarchicalValue = valueHierarchy
                 .slice(0, i + 1)
@@ -838,38 +807,40 @@ export class Links {
 
               if (
                 this.settings.enableDuplicateRemoval &&
-                (seen[markdownFile.path] ||
-                  forwardLinkSet.has(filePathToLinkText(markdownFile.path)) ||
-                  twoHopLinkSet.has(filePathToLinkText(markdownFile.path)))
+                (frontmatterSeen[markdownFile.path] ||
+                  forwardLinkSet.has(linkText) ||
+                  twoHopLinkSet.has(linkText))
               ) {
                 continue;
               }
 
-              const linkText = filePathToLinkText(markdownFile.path);
               frontmatterKeyMap[key][hierarchicalValue].push(
                 new FileEntity(activeFile.path, linkText)
               );
-              seen[markdownFile.path] = true;
+              frontmatterSeen[markdownFile.path] = true;
             }
           }
         }
       }
     }
 
-    const frontmatterKeyLinksEntities: PropertiesLinks[] = [];
+    const tagLinksList = (
+      await this.createPropertiesLinkEntities(this.settings, tagMap, "tags")
+    ).sort(getTagHierarchySortFunction(this.settings.sortOrder));
+    const frontmatterKeyLinksList: PropertiesLinks[] = [];
 
     for (const [key, valueMap] of Object.entries(frontmatterKeyMap)) {
-      const propertiesLinksEntities = await this.createPropertiesLinkEntities(
-        this.settings,
-        valueMap,
-        key
+      frontmatterKeyLinksList.push(
+        ...(await this.createPropertiesLinkEntities(this.settings, valueMap, key))
       );
-
-      frontmatterKeyLinksEntities.push(...propertiesLinksEntities);
     }
 
-    const sortFunction = getTagHierarchySortFunction(this.settings.sortOrder);
-    return frontmatterKeyLinksEntities.sort(sortFunction);
+    return {
+      tagLinksList,
+      frontmatterKeyLinksList: frontmatterKeyLinksList.sort(
+        getTagHierarchySortFunction(this.settings.sortOrder)
+      ),
+    };
   }
 
   async createPropertiesLinkEntities(
@@ -895,6 +866,18 @@ export class Links {
       propertiesLinksEntitiesPromises
     );
     return propertiesLinksEntities.filter((it) => it != null);
+  }
+
+  getStringValues(value: unknown): string[] {
+    if (typeof value === "string") {
+      return [value];
+    }
+
+    if (Array.isArray(value)) {
+      return value.filter((item) => typeof item === "string");
+    }
+
+    return [];
   }
 
   getTagsFromCache(
@@ -957,26 +940,36 @@ export class Links {
     sourcePathFn: (entity: FileEntity) => string | null | undefined,
     sortOrder: string
   ): Promise<FileEntity[]> {
-    const statsPromises = entities.map(async (entity) => {
-      const sourcePath = sourcePathFn(entity);
-      if (!sourcePath) {
-        return { entity, stat: null };
-      }
-
-      let stat = null;
-      try {
-        stat = await this.app.vault.adapter.stat(sourcePath);
-      } catch (error) {
-        console.debug(`Could not stat link entity: ${sourcePath}`, error);
-      }
-      return { entity, stat };
-    });
-
-    const stats = (await Promise.all(statsPromises)).filter((it) => it);
+    const stats = this.sortOrderNeedsStat(sortOrder)
+      ? await Promise.all(
+          entities.map(async (entity) => ({
+            entity,
+            stat: await this.getSortStatForPath(sourcePathFn(entity)),
+          }))
+        )
+      : entities.map((entity) => ({ entity, stat: null }));
 
     const sortFunction = getSortFunction(sortOrder);
     stats.sort(sortFunction);
 
     return stats.map((it) => it!.entity);
+  }
+
+  async getSortStatForPath(path: string | null | undefined): Promise<SortStat> {
+    if (!path) {
+      return null;
+    }
+
+    const file = this.app.vault.getAbstractFileByPath(path);
+    if (file instanceof TFile) {
+      return file.stat;
+    }
+
+    try {
+      return await this.app.vault.adapter.stat(path);
+    } catch (error) {
+      console.debug(`Could not stat link entity: ${path}`, error);
+      return null;
+    }
   }
 }

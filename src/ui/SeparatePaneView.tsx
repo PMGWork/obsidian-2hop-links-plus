@@ -9,6 +9,7 @@ export class SeparatePaneView extends ItemView {
   private plugin: TwohopLinksPlugin;
   private lastActiveLeaf: WorkspaceLeaf | undefined;
   private previousMetadataSignature = "";
+  private updateDebounceTimer: number | null = null;
   links: Links;
 
   constructor(leaf: WorkspaceLeaf, plugin: TwohopLinksPlugin, links: Links) {
@@ -39,12 +40,31 @@ export class SeparatePaneView extends ItemView {
 
       this.registerEvent(
         this.app.metadataCache.on("changed", async (_file: TFile) => {
-          await this.updateOrForceUpdate(false);
+          this.plugin.clearLinkTextCache();
+          this.scheduleUpdate();
         })
       );
     } catch (error) {
       this.handleError("Error updating TwoHopLinksView", error);
     }
+  }
+
+  async onClose(): Promise<void> {
+    if (this.updateDebounceTimer != null) {
+      window.clearTimeout(this.updateDebounceTimer);
+      this.updateDebounceTimer = null;
+    }
+  }
+
+  scheduleUpdate(): void {
+    if (this.updateDebounceTimer != null) {
+      window.clearTimeout(this.updateDebounceTimer);
+    }
+
+    this.updateDebounceTimer = window.setTimeout(async () => {
+      this.updateDebounceTimer = null;
+      await this.updateOrForceUpdate(false);
+    }, 150);
   }
 
   async updateOrForceUpdate(isForceUpdate: boolean): Promise<void> {
@@ -119,6 +139,7 @@ export class SeparatePaneView extends ItemView {
           ) {
             this.lastActiveLeaf = leaf;
             lastActiveFilePath = newActiveFilePath;
+            this.plugin.clearLinkTextCache();
             await this.updateOrForceUpdate(true);
           }
         }

@@ -7,8 +7,8 @@ interface ConnectedLinksViewProps {
   fileEntities: FileEntity[];
   displayedBoxCount: number;
   onClick: (fileEntity: FileEntity) => Promise<void>;
-  getPreview: (fileEntity: FileEntity) => Promise<string>;
-  getTitle: (fileEntity: FileEntity) => Promise<string>;
+  getPreview: (fileEntity: FileEntity, signal: AbortSignal) => Promise<string>;
+  getTitle: (fileEntity: FileEntity, signal: AbortSignal) => Promise<string>;
   onLoadMore: () => void;
   title: string;
   className: string;

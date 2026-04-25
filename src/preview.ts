@@ -1,8 +1,15 @@
 import { FileEntity } from "./model/FileEntity";
 import { isImagePath, normalizeLinkTarget } from "./utils";
 
-export async function readPreview(fileEntity: FileEntity) {
+export async function readPreview(
+  fileEntity: FileEntity,
+  signal?: AbortSignal
+) {
   const linkText = normalizeLinkTarget(fileEntity.linkText);
+
+  if (signal?.aborted) {
+    return "";
+  }
 
   if (isImagePath(fileEntity.linkText)) {
     return "";
@@ -34,6 +41,9 @@ export async function readPreview(fileEntity: FileEntity) {
     return "";
   }
   const content = await this.app.vault.cachedRead(file);
+  if (signal?.aborted) {
+    return "";
+  }
 
   const updatedContent = content.replace(/^(.*\n)?---[\s\S]*?---\n?/m, "");
   const lines = shortenExternalLinkInPreview(updatedContent).split(/\n/);

@@ -7,8 +7,8 @@ import { App, setIcon } from "obsidian";
 interface TwohopLinksViewProps {
   twoHopLinks: TwohopLink[];
   onClick: (fileEntity: FileEntity) => Promise<void>;
-  getPreview: (fileEntity: FileEntity) => Promise<string>;
-  getTitle: (fileEntity: FileEntity) => Promise<string>;
+  getPreview: (fileEntity: FileEntity, signal: AbortSignal) => Promise<string>;
+  getTitle: (fileEntity: FileEntity, signal: AbortSignal) => Promise<string>;
   app: App;
   displayedSectionCount: number;
   initialDisplayedEntitiesCount: number;
@@ -18,8 +18,8 @@ interface TwohopLinksViewProps {
 interface LinkComponentProps {
   link: TwohopLink;
   onClick: (fileEntity: FileEntity) => Promise<void>;
-  getPreview: (fileEntity: FileEntity) => Promise<string>;
-  getTitle: (fileEntity: FileEntity) => Promise<string>;
+  getPreview: (fileEntity: FileEntity, signal: AbortSignal) => Promise<string>;
+  getTitle: (fileEntity: FileEntity, signal: AbortSignal) => Promise<string>;
   app: App;
   initialDisplayedEntitiesCount: number;
   resetDisplayedEntitiesCount: boolean;
@@ -35,6 +35,7 @@ class LinkComponent extends React.Component<
   LinkComponentState
 > {
   loadMoreRef = createRef<HTMLDivElement>();
+  private titleAbortController: AbortController | null = null;
 
   constructor(props: LinkComponentProps) {
     super(props);
@@ -53,13 +54,30 @@ class LinkComponent extends React.Component<
   }
 
   async updateTitle() {
+    if (this.titleAbortController) {
+      this.titleAbortController.abort();
+    }
+    this.titleAbortController = new AbortController();
     const title =
       this.props.link.displayTitle ??
-      (await this.props.getTitle(this.props.link.link));
+      (await this.props.getTitle(
+        this.props.link.link,
+        this.titleAbortController.signal
+      ));
+
+    if (this.titleAbortController.signal.aborted) {
+      return;
+    }
 
     this.setState({
       title: title,
     });
+  }
+
+  componentWillUnmount() {
+    if (this.titleAbortController) {
+      this.titleAbortController.abort();
+    }
   }
 
   async componentDidUpdate(prevProps: LinkComponentProps) {

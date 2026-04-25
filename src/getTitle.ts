@@ -1,8 +1,12 @@
 import { FileEntity } from "./model/FileEntity";
 import { formatDisplayTitle, normalizeLinkTarget } from "./utils";
 
-export async function getTitle(fileEntity: FileEntity) {
+export async function getTitle(fileEntity: FileEntity, signal?: AbortSignal) {
   const linkText = normalizeLinkTarget(fileEntity.linkText);
+
+  if (signal?.aborted) {
+    return "";
+  }
 
   if (!this.settings.frontmatterPropertyKeyAsTitle) {
     return formatDisplayTitle(linkText);

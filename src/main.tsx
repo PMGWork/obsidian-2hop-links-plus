@@ -26,6 +26,9 @@ export default class TwohopLinksPlugin extends Plugin {
   links: Links;
 
   private previousMetadataSignature = "";
+  private renderDebounceTimer: number | null = null;
+  private previewCache: Record<string, string> = {};
+  private titleCache: Record<string, string> = {};
 
   async onload(): Promise<void> {
     console.debug("------ loading obsidian-twohop-links plugin");
@@ -45,7 +48,8 @@ export default class TwohopLinksPlugin extends Plugin {
     );
     this.registerEvent(
       this.app.metadataCache.on("changed", async (_file: TFile) => {
-        await this.renderTwohopLinks(false);
+        this.clearLinkTextCache();
+        this.scheduleRenderTwohopLinks();
       })
     );
     this.registerEvent(
@@ -68,14 +72,75 @@ export default class TwohopLinksPlugin extends Plugin {
   }
 
   onunload(): void {
+    if (this.renderDebounceTimer != null) {
+      window.clearTimeout(this.renderDebounceTimer);
+      this.renderDebounceTimer = null;
+    }
     this.disableLinksInMarkdown();
     console.log("unloading plugin");
   }
 
   async refreshTwohopLinks() {
     if (this.showLinksInMarkdown) {
+      this.clearLinkTextCache();
       await this.renderTwohopLinks(true);
     }
+  }
+
+  clearLinkTextCache(): void {
+    this.previewCache = {};
+    this.titleCache = {};
+  }
+
+  private scheduleRenderTwohopLinks(): void {
+    if (this.renderDebounceTimer != null) {
+      window.clearTimeout(this.renderDebounceTimer);
+    }
+
+    this.renderDebounceTimer = window.setTimeout(async () => {
+      this.renderDebounceTimer = null;
+      if (this.showLinksInMarkdown) {
+        await this.renderTwohopLinks(false);
+      }
+    }, 150);
+  }
+
+  private getLinkCacheKey(fileEntity: FileEntity): string {
+    return `${fileEntity.sourcePath}\u001f${normalizeLinkTarget(
+      fileEntity.linkText
+    )}`;
+  }
+
+  private async getCachedPreview(
+    fileEntity: FileEntity,
+    signal: AbortSignal
+  ): Promise<string> {
+    const key = this.getLinkCacheKey(fileEntity);
+    if (this.previewCache[key] != null) {
+      return this.previewCache[key];
+    }
+
+    const preview = await readPreview.call(this, fileEntity, signal);
+    if (!signal.aborted) {
+      this.previewCache[key] = preview;
+    }
+    return preview;
+  }
+
+  private async getCachedTitle(
+    fileEntity: FileEntity,
+    signal: AbortSignal
+  ): Promise<string> {
+    const key = this.getLinkCacheKey(fileEntity);
+    if (this.titleCache[key] != null) {
+      return this.titleCache[key];
+    }
+
+    const title = await getTitle.call(this, fileEntity, signal);
+    if (!signal.aborted) {
+      this.titleCache[key] = title;
+    }
+    return title;
   }
 
   private async debugTwohopLinks(): Promise<void> {
@@ -113,6 +178,7 @@ export default class TwohopLinksPlugin extends Plugin {
   }
 
   async updateTwoHopLinksView() {
+    this.clearLinkTextCache();
     if (this.isTwoHopLinksViewOpen()) {
       this.app.workspace.detachLeavesOfType("TwoHopLinksView");
     }
@@ -223,8 +289,8 @@ export default class TwohopLinksPlugin extends Plugin {
         tagLinksList={tagLinksList}
         frontmatterKeyLinksList={frontmatterKeyLinksList}
         onClick={this.openFile.bind(this)}
-        getPreview={readPreview.bind(this)}
-        getTitle={getTitle.bind(this)}
+        getPreview={this.getCachedPreview.bind(this)}
+        getTitle={this.getCachedTitle.bind(this)}
         app={this.app}
         showForwardConnectedLinks={showForwardConnectedLinks}
         showBackwardConnectedLinks={showBackwardConnectedLinks}
