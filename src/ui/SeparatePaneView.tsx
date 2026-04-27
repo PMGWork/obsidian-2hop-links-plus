@@ -59,12 +59,10 @@ export class SeparatePaneView extends ItemView {
   scheduleUpdate(): void {
     if (this.updateDebounceTimer != null) {
       window.clearTimeout(this.updateDebounceTimer);
+      this.updateDebounceTimer = null;
     }
 
-    this.updateDebounceTimer = window.setTimeout(async () => {
-      this.updateDebounceTimer = null;
-      await this.updateOrForceUpdate(false);
-    }, 150);
+    void this.updateOrForceUpdate(false);
   }
 
   async updateOrForceUpdate(isForceUpdate: boolean): Promise<void> {

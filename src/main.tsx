@@ -95,14 +95,12 @@ export default class TwohopLinksPlugin extends Plugin {
   private scheduleRenderTwohopLinks(): void {
     if (this.renderDebounceTimer != null) {
       window.clearTimeout(this.renderDebounceTimer);
+      this.renderDebounceTimer = null;
     }
 
-    this.renderDebounceTimer = window.setTimeout(async () => {
-      this.renderDebounceTimer = null;
-      if (this.showLinksInMarkdown) {
-        await this.renderTwohopLinks(false);
-      }
-    }, 150);
+    if (this.showLinksInMarkdown) {
+      void this.renderTwohopLinks(false);
+    }
   }
 
   private getLinkCacheKey(fileEntity: FileEntity): string {
